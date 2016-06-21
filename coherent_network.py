@@ -203,7 +203,7 @@ def coherence_stats(G):
         mean_x = np.mean(x)
         q = np.std(x, ddof=1)  # sample variance
 
-    # put eveyrthing  a dictionary
+    # put everything in a dictionary
     stats["q"] = q
     stats["s"] = s
     stats["x"] = x
