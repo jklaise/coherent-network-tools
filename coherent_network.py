@@ -5,6 +5,8 @@ Library for generating and studying trophically coherent random networks.
 
 import numpy as np
 import networkx as nx
+from scipy import sparse
+from scipy.sparse.linalg import *
 
 
 def _link_prob(s1, s2, T):
@@ -17,8 +19,6 @@ def _link_prob(s1, s2, T):
     return np.exp(-np.abs(s2-s1-1)**2/(2*T**2))
 
 
-# receive a list of trophic levels, make an N*N matrix of link probabilities
-# and return it
 def _create_link_probs(s, T):
     """
     Return a 2D array of link probabilities given the trophic levels s in a
@@ -123,3 +123,90 @@ def coherent_graph(B, N, L, T):
     G.graph['normC'] = normConst
 
     return G
+
+
+def coherence_stats(G):
+    """
+    Return a dictionary of coherence statistics.
+
+    Parameters
+    ----------
+    G : networkx.DiGraph()
+        Input network.
+
+    Returns
+    -------
+    stats : dict()
+        A dictionary of coherence statistics. Includes the keys "q", "s", "x"
+        and "b" where
+
+        stats["q"] : float
+            Trophic incoherence parameter.
+
+        stats["s"] : numpy.ndarray
+            Array of trophic levels.
+
+        stats["x"] : numpy.ndarray
+            Array of trophic distances.
+
+        stats["b"] : int
+            Number of basal nodes with no incoming links.
+
+    Examples
+    --------
+    >>> G = coherent_graph(B=10, N=100, L=450, T=0.5)
+    >>> stats = coherence_stats(G)
+    >>> stats["x"].mean()
+    1.0
+
+    """
+
+    # dictionary of coherence statistics to be returned
+    stats = dict.fromkeys(["q", "s", "x", "b"], None)
+
+    # get the adjacency matrix
+    A = nx.adj_matrix(G)
+
+    # get degree sequences
+    outDeg = np.fromiter(G.out_degree().values(), dtype=int)
+    inDeg = np.fromiter(G.in_degree().values(), dtype=int)
+
+    # if no basal nodes found, return NaN
+    nnz = np.count_nonzero(inDeg)
+    if nnz == len(inDeg):
+        q = np.nan
+        s = np.nan
+        x = np.nan
+        b = 0
+
+    # otherwise proceed as normal
+    else:
+        # number of basal nodes
+        b = len(inDeg) - nnz
+
+        # define the linear system
+        v = np.maximum(inDeg, 1)
+        lam = sparse.diags(v, 0, dtype=int) - A
+
+        # solve for trophic levels
+        s = spsolve(lam.T, v)  # transpose
+
+        # set them as attributes
+        nx.set_node_attributes(G, 's', dict(zip(G.nodes(), s)))
+
+        # calculate and set trophic distances
+        for e in G.edges(data=True):
+            G[e[0]][e[1]]['x'] = G.node[e[1]]['s']-G.node[e[0]]['s']
+
+        # calculate q as std of x
+        x = np.asarray(list(nx.get_edge_attributes(G, 'x').values()))
+        mean_x = np.mean(x)
+        q = np.std(x, ddof=1)  # sample variance
+
+    # put eveyrthing  a dictionary
+    stats["q"] = q
+    stats["s"] = s
+    stats["x"] = x
+    stats["b"] = b
+
+    return stats
