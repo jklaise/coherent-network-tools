@@ -5,6 +5,7 @@ Library for generating and studying trophically coherent random networks.
 
 import numpy as np
 import networkx as nx
+from networkx.utils import not_implemented_for
 from scipy import sparse
 from scipy.sparse.linalg import *
 
@@ -125,6 +126,7 @@ def coherent_graph(B, N, L, T):
     return G
 
 
+@not_implemented_for('undirected')
 def coherence_stats(G):
     """
     Return a dictionary of coherence statistics.
